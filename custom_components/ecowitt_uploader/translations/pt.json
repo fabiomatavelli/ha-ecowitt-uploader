@@ -1,0 +1,95 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Estação no Ecowitt.net",
+        "description": "Adicione primeiro a sua estação meteorológica no ecowitt.net (Device Type: Weather Station) e depois introduza aqui o mesmo endereço MAC. O Home Assistant envia para essa estação os sensores que associar no passo seguinte.",
+        "data": {
+          "mac": "Endereço MAC da estação",
+          "interval": "Intervalo de envio"
+        },
+        "data_description": {
+          "mac": "Exatamente o endereço MAC registado no ecowitt.net, p. ex. AA:BB:CC:DD:EE:FF.",
+          "interval": "Com que frequência as leituras atuais são enviadas."
+        }
+      },
+      "sensors": {
+        "title": "Associe os seus sensores",
+        "description": "Escolha o sensor do Home Assistant para cada medição que a sua estação tem e deixe os restantes em branco. As unidades são convertidas automaticamente.",
+        "data": {
+          "temperature": "Temperatura exterior",
+          "humidity": "Humidade exterior",
+          "pressure_absolute": "Pressão absoluta (da estação)",
+          "pressure_relative": "Pressão relativa (ao nível do mar)",
+          "wind_speed": "Velocidade do vento",
+          "wind_gust": "Rajada de vento",
+          "wind_direction": "Direção do vento",
+          "rain_rate": "Intensidade da chuva",
+          "rain_event": "Chuva do evento",
+          "rain_hourly": "Chuva na última hora",
+          "rain_daily": "Chuva hoje",
+          "rain_weekly": "Chuva esta semana",
+          "rain_monthly": "Chuva este mês",
+          "rain_yearly": "Chuva este ano",
+          "solar_radiation": "Radiação solar",
+          "uv_index": "Índice UV",
+          "indoor_temperature": "Temperatura interior",
+          "indoor_humidity": "Humidade interior"
+        },
+        "data_description": {
+          "pressure_relative": "Se ficar em branco, é calculada a partir da pressão absoluta e da altitude definida no Home Assistant.",
+          "solar_radiation": "Um sensor em W/m² ou em lux."
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "Endereço MAC inválido.",
+      "no_sensors": "Associe pelo menos um sensor."
+    },
+    "abort": {
+      "already_configured": "Esta estação já está configurada."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Envio para o Ecowitt.net",
+        "data": {
+          "interval": "Intervalo de envio",
+          "temperature": "Temperatura exterior",
+          "humidity": "Humidade exterior",
+          "pressure_absolute": "Pressão absoluta (da estação)",
+          "pressure_relative": "Pressão relativa (ao nível do mar)",
+          "wind_speed": "Velocidade do vento",
+          "wind_gust": "Rajada de vento",
+          "wind_direction": "Direção do vento",
+          "rain_rate": "Intensidade da chuva",
+          "rain_event": "Chuva do evento",
+          "rain_hourly": "Chuva na última hora",
+          "rain_daily": "Chuva hoje",
+          "rain_weekly": "Chuva esta semana",
+          "rain_monthly": "Chuva este mês",
+          "rain_yearly": "Chuva este ano",
+          "solar_radiation": "Radiação solar",
+          "uv_index": "Índice UV",
+          "indoor_temperature": "Temperatura interior",
+          "indoor_humidity": "Humidade interior"
+        },
+        "data_description": {
+          "pressure_relative": "Se ficar em branco, é calculada a partir da pressão absoluta e da altitude definida no Home Assistant.",
+          "solar_radiation": "Um sensor em W/m² ou em lux."
+        }
+      }
+    },
+    "error": {
+      "no_sensors": "Associe pelo menos um sensor."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_upload": {
+        "name": "Último envio"
+      }
+    }
+  }
+}
