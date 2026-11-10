@@ -99,25 +99,26 @@ class EcowittUploaderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Show the MAC address to register on ecowitt.net and create the entry."""
         assert self._profile is not None
         placeholders = {"name": self._profile.name, "mac": self._address}
+        errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Checked only now: BTHome is often discovered at the same moment as this flow,
-            # and aborting before showing the form would drop the discovery card for good.
+            # BTHome is often discovered at the same moment as this flow, and an aborted
+            # discovery never comes back: ask again instead of aborting.
             bthome_entity = er.async_get(self.hass).async_get_entity_id(
                 "sensor", "bthome", f"{self._address}-temperature"
             )
-            if bthome_entity is None:
-                return self.async_abort(
-                    reason="bthome_missing", description_placeholders=placeholders
+            if bthome_entity is not None:
+                return self.async_create_entry(
+                    title=f"Ecowitt.net {self._address}",
+                    data={CONF_MAC: self._address, CONF_MODEL_ID: self._profile.model_id},
+                    options={CONF_INTERVAL: DEFAULT_INTERVAL},
                 )
-            return self.async_create_entry(
-                title=f"Ecowitt.net {self._address}",
-                data={CONF_MAC: self._address, CONF_MODEL_ID: self._profile.model_id},
-                options={CONF_INTERVAL: DEFAULT_INTERVAL},
-            )
+            errors["base"] = "bthome_missing"
 
         self._set_confirm_only()
-        return self.async_show_form(step_id="confirm", description_placeholders=placeholders)
+        return self.async_show_form(
+            step_id="confirm", description_placeholders=placeholders, errors=errors
+        )
 
     @staticmethod
     @callback

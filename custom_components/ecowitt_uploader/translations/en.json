@@ -14,11 +14,13 @@
         "description": "Before continuing, add this station on ecowitt.net (Device Type: Weather Station) with the MAC address **{mac}**. Home Assistant will then upload its readings there."
       }
     },
+    "error": {
+      "bthome_missing": "{name} ({mac}) hasn't been added to the BTHome integration yet. Add it there first, then submit again."
+    },
     "abort": {
       "already_configured": "This station is already configured.",
       "no_devices_found": "No supported Ecowitt station was found over Bluetooth. Make sure it's in range of Home Assistant's Bluetooth adapters or proxies.",
-      "not_supported": "This device isn't a supported Ecowitt station.",
-      "bthome_missing": "{name} ({mac}) hasn't been added to the BTHome integration yet. Add it there first, then set up this integration again."
+      "not_supported": "This device isn't a supported Ecowitt station."
     }
   },
   "options": {

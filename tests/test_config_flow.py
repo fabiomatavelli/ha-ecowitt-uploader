@@ -59,10 +59,15 @@ async def test_bthome_must_know_the_station(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
 
-    # ...and only confirming it asks for the station to be added to BTHome first.
+    # ...confirming asks for the station to be added to BTHome first, without losing it...
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "bthome_missing"
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "bthome_missing"}
+
+    # ...and once BTHome has it, confirming again creates the entry.
+    add_bthome_sensor(hass, "temperature", "19.0", "°C")
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 async def test_already_configured(hass: HomeAssistant) -> None:
