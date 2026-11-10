@@ -8,7 +8,6 @@ import pytest
 
 from custom_components.ecowitt_uploader.uploader import (
     build_payload,
-    normalize_mac,
     passkey,
     sea_level_factor,
 )
@@ -16,27 +15,6 @@ from custom_components.ecowitt_uploader.uploader import (
 from .conftest import MAC, PASSKEY
 
 NOW = datetime(2026, 11, 10, 10, 48, 0, tzinfo=UTC)
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "AA:BB:CC:DD:EE:FF",
-        "aa:bb:cc:dd:ee:ff",
-        "AA-BB-CC-DD-EE-FF",
-        "aabb.ccdd.eeff",
-        " AABBCCDDEEFF ",
-    ],
-)
-def test_normalize_mac_accepts_common_spellings(value: str) -> None:
-    assert normalize_mac(value) == MAC
-
-
-@pytest.mark.parametrize(
-    "value", ["", "AA:BB:CC:DD:EE", "GG:BB:CC:DD:EE:FF", "AA:BB:CC:DD:EE:FF:00"]
-)
-def test_normalize_mac_rejects_invalid(value: str) -> None:
-    assert normalize_mac(value) is None
 
 
 def test_passkey() -> None:

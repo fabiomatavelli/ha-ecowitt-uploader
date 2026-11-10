@@ -41,6 +41,7 @@ class LastUploadSensor(CoordinatorEntity[EcowittUploadCoordinator], SensorEntity
             identifiers={(DOMAIN, entry.unique_id)},
             name=entry.title,
             manufacturer="Ecowitt.net",
+            model=coordinator.profile.name,
             entry_type=DeviceEntryType.SERVICE,
             configuration_url="https://www.ecowitt.net",
         )

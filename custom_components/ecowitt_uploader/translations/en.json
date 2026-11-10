@@ -1,53 +1,26 @@
 {
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
-        "title": "Ecowitt.net station",
-        "description": "Add your weather station on ecowitt.net first (Device Type: Weather Station), then enter the same MAC address here. Home Assistant uploads the sensors you map in the next step to that station.",
+        "title": "Choose your station",
+        "description": "Supported Ecowitt stations that Home Assistant currently sees over Bluetooth.",
         "data": {
-          "mac": "Station MAC address",
-          "interval": "Upload interval"
-        },
-        "data_description": {
-          "mac": "Exactly the MAC address registered on ecowitt.net, e.g. AA:BB:CC:DD:EE:FF.",
-          "interval": "How often the current readings are uploaded."
+          "address": "Station"
         }
       },
-      "sensors": {
-        "title": "Map your sensors",
-        "description": "Pick the Home Assistant sensor for each measurement your station has and leave the rest empty. Units are converted automatically.",
-        "data": {
-          "temperature": "Outdoor temperature",
-          "humidity": "Outdoor humidity",
-          "pressure_absolute": "Absolute (station) pressure",
-          "pressure_relative": "Relative (sea-level) pressure",
-          "wind_speed": "Wind speed",
-          "wind_gust": "Wind gust",
-          "wind_direction": "Wind direction",
-          "rain_rate": "Rain rate",
-          "rain_event": "Rain event",
-          "rain_hourly": "Rain in the last hour",
-          "rain_daily": "Rain today",
-          "rain_weekly": "Rain this week",
-          "rain_monthly": "Rain this month",
-          "rain_yearly": "Rain this year",
-          "solar_radiation": "Solar radiation",
-          "uv_index": "UV index",
-          "indoor_temperature": "Indoor temperature",
-          "indoor_humidity": "Indoor humidity"
-        },
-        "data_description": {
-          "pressure_relative": "If left empty, it's calculated from the absolute pressure and the elevation set in Home Assistant.",
-          "solar_radiation": "A sensor in W/m² or in lux."
-        }
+      "confirm": {
+        "title": "Upload {name} to Ecowitt.net",
+        "description": "Before continuing, add this station on ecowitt.net (Device Type: Weather Station) with the MAC address **{mac}**. Home Assistant will then upload its readings there."
       }
     },
     "error": {
-      "invalid_mac": "Not a valid MAC address.",
-      "no_sensors": "Map at least one sensor."
+      "bthome_missing": "{name} ({mac}) hasn't been added to the BTHome integration yet. Add it there first, then submit again."
     },
     "abort": {
-      "already_configured": "This station is already configured."
+      "already_configured": "This station is already configured.",
+      "no_devices_found": "No supported Ecowitt station was found over Bluetooth. Make sure it's in range of Home Assistant's Bluetooth adapters or proxies.",
+      "not_supported": "This device isn't a supported Ecowitt station."
     }
   },
   "options": {
@@ -55,34 +28,12 @@
       "init": {
         "title": "Ecowitt.net upload",
         "data": {
-          "interval": "Upload interval",
-          "temperature": "Outdoor temperature",
-          "humidity": "Outdoor humidity",
-          "pressure_absolute": "Absolute (station) pressure",
-          "pressure_relative": "Relative (sea-level) pressure",
-          "wind_speed": "Wind speed",
-          "wind_gust": "Wind gust",
-          "wind_direction": "Wind direction",
-          "rain_rate": "Rain rate",
-          "rain_event": "Rain event",
-          "rain_hourly": "Rain in the last hour",
-          "rain_daily": "Rain today",
-          "rain_weekly": "Rain this week",
-          "rain_monthly": "Rain this month",
-          "rain_yearly": "Rain this year",
-          "solar_radiation": "Solar radiation",
-          "uv_index": "UV index",
-          "indoor_temperature": "Indoor temperature",
-          "indoor_humidity": "Indoor humidity"
+          "interval": "Upload interval"
         },
         "data_description": {
-          "pressure_relative": "If left empty, it's calculated from the absolute pressure and the elevation set in Home Assistant.",
-          "solar_radiation": "A sensor in W/m² or in lux."
+          "interval": "How often the station's current readings are uploaded."
         }
       }
-    },
-    "error": {
-      "no_sensors": "Map at least one sensor."
     }
   },
   "entity": {

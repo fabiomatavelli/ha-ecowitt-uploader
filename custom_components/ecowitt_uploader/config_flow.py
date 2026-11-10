@@ -1,4 +1,8 @@
-"""Config flow for the Ecowitt.net Uploader integration."""
+"""Config flow for the Ecowitt.net Uploader integration.
+
+Only supported Ecowitt stations (see profiles.py) seen over Bluetooth can be added; the
+station's own Bluetooth address identifies it on ecowitt.net.
+"""
 
 from __future__ import annotations
 
@@ -6,94 +10,114 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.components.bluetooth import (
+    BluetoothServiceInfoBleak,
+    async_discovered_service_info,
+)
+from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
 from .const import (
     CONF_INTERVAL,
     CONF_MAC,
+    CONF_MODEL_ID,
     DEFAULT_INTERVAL,
     DOMAIN,
-    FIELDS,
     MAX_INTERVAL,
     MIN_INTERVAL,
 )
-from .uploader import normalize_mac
+from .profiles import StationProfile, profile_for
 
-INTERVAL_SELECTOR = selector.NumberSelector(
-    selector.NumberSelectorConfig(
-        min=MIN_INTERVAL,
-        max=MAX_INTERVAL,
-        unit_of_measurement="s",
-        mode=selector.NumberSelectorMode.BOX,
-    )
-)
-SENSOR_SELECTOR = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
-
-USER_SCHEMA = vol.Schema(
+OPTIONS_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_MAC): selector.TextSelector(),
-        vol.Required(CONF_INTERVAL, default=DEFAULT_INTERVAL): INTERVAL_SELECTOR,
+        vol.Required(CONF_INTERVAL, default=DEFAULT_INTERVAL): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=MIN_INTERVAL,
+                max=MAX_INTERVAL,
+                unit_of_measurement="s",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        ),
     }
 )
-SENSORS_SCHEMA = vol.Schema({vol.Optional(field.key): SENSOR_SELECTOR for field in FIELDS})
-OPTIONS_SCHEMA = vol.Schema(
-    {vol.Required(CONF_INTERVAL, default=DEFAULT_INTERVAL): INTERVAL_SELECTOR}
-).extend(SENSORS_SCHEMA.schema)
-
-
-def _has_sensor(user_input: dict[str, Any]) -> bool:
-    return any(user_input.get(field.key) for field in FIELDS)
 
 
 class EcowittUploaderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Set up uploads for one Ecowitt.net station."""
+    """Add a supported Ecowitt station found over Bluetooth."""
 
     VERSION = 1
 
-    _mac: str
-    _interval: int
+    def __init__(self) -> None:
+        self._address = ""
+        self._profile: StationProfile | None = None
+        self._discovered: dict[str, StationProfile] = {}
+
+    async def async_step_bluetooth(
+        self, discovery_info: BluetoothServiceInfoBleak
+    ) -> config_entries.ConfigFlowResult:
+        """A Shelly device was seen: continue only if it's a supported station."""
+        profile = profile_for(discovery_info.manufacturer_data)
+        if profile is None:
+            return self.async_abort(reason="not_supported")
+        await self.async_set_unique_id(discovery_info.address)
+        self._abort_if_unique_id_configured()
+        self._address, self._profile = discovery_info.address, profile
+        self.context["title_placeholders"] = {"name": profile.name}
+        return await self.async_step_confirm()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Ask for the station's MAC address and the upload interval."""
-        errors: dict[str, str] = {}
+        """Pick one of the supported stations Home Assistant currently sees."""
         if user_input is not None:
-            mac = normalize_mac(user_input[CONF_MAC])
-            if mac is None:
-                errors[CONF_MAC] = "invalid_mac"
-            else:
-                await self.async_set_unique_id(mac)
-                self._abort_if_unique_id_configured()
-                self._mac = mac
-                self._interval = int(user_input[CONF_INTERVAL])
-                return await self.async_step_sensors()
+            address = user_input[CONF_ADDRESS]
+            await self.async_set_unique_id(address, raise_on_progress=False)
+            self._abort_if_unique_id_configured()
+            self._address, self._profile = address, self._discovered[address]
+            return await self.async_step_confirm()
 
+        configured = self._async_current_ids(include_ignore=False)
+        for info in async_discovered_service_info(self.hass, connectable=False):
+            if info.address in configured:
+                continue
+            if profile := profile_for(info.manufacturer_data):
+                self._discovered[info.address] = profile
+        if not self._discovered:
+            return self.async_abort(reason="no_devices_found")
+
+        options = {addr: f"{p.name} ({addr})" for addr, p in self._discovered.items()}
         return self.async_show_form(
             step_id="user",
-            data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, user_input),
-            errors=errors,
+            data_schema=vol.Schema({vol.Required(CONF_ADDRESS): vol.In(options)}),
         )
 
-    async def async_step_sensors(
+    async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Map Home Assistant sensors to the station's measurements."""
+        """Show the MAC address to register on ecowitt.net and create the entry."""
+        assert self._profile is not None
+        placeholders = {"name": self._profile.name, "mac": self._address}
         errors: dict[str, str] = {}
-        if user_input is not None:
-            if _has_sensor(user_input):
-                return self.async_create_entry(
-                    title=f"Ecowitt.net {self._mac}",
-                    data={CONF_MAC: self._mac},
-                    options={CONF_INTERVAL: self._interval, **user_input},
-                )
-            errors["base"] = "no_sensors"
 
+        if user_input is not None:
+            # BTHome is often discovered at the same moment as this flow, and an aborted
+            # discovery never comes back: ask again instead of aborting.
+            bthome_entity = er.async_get(self.hass).async_get_entity_id(
+                "sensor", "bthome", f"{self._address}-temperature"
+            )
+            if bthome_entity is not None:
+                return self.async_create_entry(
+                    title=f"Ecowitt.net {self._address}",
+                    data={CONF_MAC: self._address, CONF_MODEL_ID: self._profile.model_id},
+                    options={CONF_INTERVAL: DEFAULT_INTERVAL},
+                )
+            errors["base"] = "bthome_missing"
+
+        self._set_confirm_only()
         return self.async_show_form(
-            step_id="sensors",
-            data_schema=self.add_suggested_values_to_schema(SENSORS_SCHEMA, user_input),
-            errors=errors,
+            step_id="confirm", description_placeholders=placeholders, errors=errors
         )
 
     @staticmethod
@@ -106,25 +130,17 @@ class EcowittUploaderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class EcowittUploaderOptionsFlow(config_entries.OptionsFlow):
-    """Change the interval and the sensor mapping."""
+    """Change the upload interval."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Show the interval and every mapping in one form."""
-        errors: dict[str, str] = {}
+        """Show the interval."""
         if user_input is not None:
-            if _has_sensor(user_input):
-                return self.async_create_entry(
-                    data={**user_input, CONF_INTERVAL: int(user_input[CONF_INTERVAL])}
-                )
-            errors["base"] = "no_sensors"
-
+            return self.async_create_entry(data={CONF_INTERVAL: int(user_input[CONF_INTERVAL])})
         return self.async_show_form(
             step_id="init",
-            # Suggested (not default) values, so clearing a sensor actually removes it.
             data_schema=self.add_suggested_values_to_schema(
-                OPTIONS_SCHEMA, user_input or self.config_entry.options
+                OPTIONS_SCHEMA, self.config_entry.options
             ),
-            errors=errors,
         )

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from datetime import datetime
 
 import aiohttp
@@ -17,20 +16,9 @@ UPLOAD_URL = "http://cdnrtpdate.ecowitt.net/data/report/"
 STATION_TYPE = "HomeAssistant"
 TIMEOUT = aiohttp.ClientTimeout(total=30)
 
-_MAC_DIGITS = re.compile(r"[0-9A-Fa-f]{12}")
-
 
 class UploadError(Exception):
     """Ecowitt.net refused or failed the upload."""
-
-
-def normalize_mac(value: str) -> str | None:
-    """Return ``AA:BB:CC:DD:EE:FF`` for any common MAC spelling, or None if invalid."""
-    digits = re.sub(r"[\s:\-.]", "", value)
-    if not _MAC_DIGITS.fullmatch(digits):
-        return None
-    digits = digits.upper()
-    return ":".join(digits[i : i + 2] for i in range(0, 12, 2))
 
 
 def passkey(mac: str) -> str:
