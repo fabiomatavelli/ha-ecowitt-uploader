@@ -122,6 +122,27 @@ async def test_keeps_uploading_with_status_sensor_disabled(
     assert aioclient_mock.call_count == 2
 
 
+async def test_removing_entry_deletes_rain_state(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    hass_storage: dict,
+) -> None:
+    key = f"{DOMAIN}.{entry.entry_id}.rain"
+    hass_storage[key] = {
+        "version": 1,
+        "key": key,
+        "data": {"offset": 0.0, "last_total": None, "bases": {}},
+    }
+    aioclient_mock.post(UPLOAD_URL, text=OK)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert key not in hass_storage
+
+
 async def test_rejected_upload_retries_setup(
     hass: HomeAssistant, entry: MockConfigEntry, aioclient_mock: AiohttpClientMocker
 ) -> None:

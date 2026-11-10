@@ -34,11 +34,16 @@ PERIODS: dict[str, Callable[[datetime], str]] = {
 }
 
 
+def rain_store(hass: HomeAssistant, entry_id: str) -> Store[dict[str, Any]]:
+    """Where a config entry's rain period starts are saved."""
+    return Store(hass, 1, f"{DOMAIN}.{entry_id}.rain")
+
+
 class RainTracker:
     """Turns an accumulated rain total into Ecowitt's period totals and rate."""
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
-        self._store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.{entry_id}.rain")
+        self._store = rain_store(hass, entry_id)
         self._state: dict[str, Any] = {"offset": 0.0, "last_total": None, "bases": {}}
         self._history: deque[tuple[datetime, float]] = deque()
 
