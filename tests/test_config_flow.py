@@ -52,9 +52,15 @@ async def test_discovery_of_unsupported_device(hass: HomeAssistant) -> None:
 
 
 async def test_bthome_must_know_the_station(hass: HomeAssistant) -> None:
+    # Without BTHome yet, the discovery card must still show up...
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_BLUETOOTH}, data=service_info()
     )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "confirm"
+
+    # ...and only confirming it asks for the station to be added to BTHome first.
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "bthome_missing"
 

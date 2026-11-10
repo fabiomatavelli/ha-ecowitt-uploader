@@ -99,13 +99,17 @@ class EcowittUploaderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Show the MAC address to register on ecowitt.net and create the entry."""
         assert self._profile is not None
         placeholders = {"name": self._profile.name, "mac": self._address}
-        bthome_entity = er.async_get(self.hass).async_get_entity_id(
-            "sensor", "bthome", f"{self._address}-temperature"
-        )
-        if bthome_entity is None:
-            return self.async_abort(reason="bthome_missing", description_placeholders=placeholders)
 
         if user_input is not None:
+            # Checked only now: BTHome is often discovered at the same moment as this flow,
+            # and aborting before showing the form would drop the discovery card for good.
+            bthome_entity = er.async_get(self.hass).async_get_entity_id(
+                "sensor", "bthome", f"{self._address}-temperature"
+            )
+            if bthome_entity is None:
+                return self.async_abort(
+                    reason="bthome_missing", description_placeholders=placeholders
+                )
             return self.async_create_entry(
                 title=f"Ecowitt.net {self._address}",
                 data={CONF_MAC: self._address, CONF_MODEL_ID: self._profile.model_id},
