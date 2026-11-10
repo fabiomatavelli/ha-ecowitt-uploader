@@ -142,6 +142,11 @@ async def test_removing_entry_deletes_rain_state(
     await hass.async_block_till_done()
     assert key not in hass_storage
 
+    # the upload above scheduled a delayed save: it must not bring the file back
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+    await hass.async_block_till_done()
+    assert key not in hass_storage
+
 
 async def test_rejected_upload_retries_setup(
     hass: HomeAssistant, entry: MockConfigEntry, aioclient_mock: AiohttpClientMocker

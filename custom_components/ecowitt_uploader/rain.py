@@ -52,6 +52,10 @@ class RainTracker:
         if stored := await self._store.async_load():
             self._state = stored
 
+    async def async_save(self) -> None:
+        """Write now, cancelling the pending delayed write so it can't fire after unload."""
+        await self._store.async_save(self._state)
+
     def update(self, total: float, now: datetime) -> dict[str, float]:
         """Period totals and rate (per hour) for the station's current total.
 

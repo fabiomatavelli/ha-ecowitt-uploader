@@ -95,6 +95,12 @@ class EcowittUploadCoordinator(DataUpdateCoordinator[UploadStatus]):
         if self.rain:
             await self.rain.async_load()
 
+    async def async_shutdown(self) -> None:
+        """On unload, flush the rain state so no delayed write outlives the entry."""
+        await super().async_shutdown()
+        if self.rain:
+            await self.rain.async_save()
+
     def _state(self, key: str) -> State | None:
         """State of the station's BTHome sensor ``key``."""
         unique_id = f"{self.config_entry.data[CONF_MAC]}-{key}"
