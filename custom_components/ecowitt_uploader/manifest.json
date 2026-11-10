@@ -1,0 +1,15 @@
+{
+  "domain": "ecowitt_uploader",
+  "name": "Ecowitt.net Uploader",
+  "codeowners": [
+    "@fabiomatavelli"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/fabiomatavelli/ha-ecowitt-uploader",
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/fabiomatavelli/ha-ecowitt-uploader/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

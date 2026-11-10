@@ -1,0 +1,41 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Single source of truth for the Python version, kept in sync with Home Assistant
+  # core's own requires-python (currently >=3.14.2, as of the 2026.7.2 stable release) -
+  # older interpreters aren't a real target since HA itself won't run this integration
+  # on them. No matrix here on purpose: a matrix (even with one entry) makes GitHub
+  # auto-append the version to the job's check-run name, which breaks the "Pytest"
+  # required status check on every future bump - see branch protection.
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install "$(grep '^ruff==' requirements-test.txt)"
+      - run: ruff check .
+
+  pytest:
+    name: Pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r requirements-test.txt
+      - run: pytest
