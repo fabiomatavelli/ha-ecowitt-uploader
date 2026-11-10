@@ -1,11 +1,22 @@
 {
   "domain": "ecowitt_uploader",
   "name": "Ecowitt.net Uploader",
+  "after_dependencies": [
+    "bthome"
+  ],
+  "bluetooth": [
+    {
+      "connectable": false,
+      "manufacturer_id": 2985
+    }
+  ],
   "codeowners": [
     "@fabiomatavelli"
   ],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": [
+    "bluetooth"
+  ],
   "documentation": "https://github.com/fabiomatavelli/ha-ecowitt-uploader",
   "integration_type": "service",
   "iot_class": "cloud_push",

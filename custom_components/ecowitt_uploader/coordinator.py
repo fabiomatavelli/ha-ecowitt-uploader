@@ -1,4 +1,4 @@
-"""Periodic upload of the mapped sensors to Ecowitt.net."""
+"""Periodic upload of a supported station's BTHome readings to Ecowitt.net."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ from homeassistant.const import (
     UnitOfPressure,
     UnitOfSpeed,
     UnitOfTemperature,
-    UnitOfVolumetricFlux,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -29,7 +29,9 @@ from homeassistant.util.unit_conversion import (
     TemperatureConverter,
 )
 
-from .const import CONF_INTERVAL, CONF_MAC, DEFAULT_INTERVAL, DOMAIN, FIELDS
+from .const import CONF_INTERVAL, CONF_MAC, CONF_MODEL_ID, DEFAULT_INTERVAL, DOMAIN, PARAM_UNITS
+from .profiles import PROFILES
+from .rain import RainTracker
 from .uploader import UploadError, async_upload, build_payload
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,7 +45,6 @@ CONVERTERS: dict[str, type[BaseUnitConverter]] = {
     UnitOfTemperature.FAHRENHEIT: TemperatureConverter,
     UnitOfPressure.INHG: PressureConverter,
     UnitOfSpeed.MILES_PER_HOUR: SpeedConverter,
-    UnitOfVolumetricFlux.INCHES_PER_HOUR: SpeedConverter,
     UnitOfPrecipitationDepth.INCHES: DistanceConverter,
 }
 
@@ -74,7 +75,7 @@ type EcowittUploaderConfigEntry = ConfigEntry[EcowittUploadCoordinator]
 
 
 class EcowittUploadCoordinator(DataUpdateCoordinator[UploadStatus]):
-    """Reads the mapped sensors and uploads them every ``interval`` seconds."""
+    """Reads the station's BTHome entities and uploads them every ``interval`` seconds."""
 
     config_entry: EcowittUploaderConfigEntry
 
@@ -87,31 +88,49 @@ class EcowittUploadCoordinator(DataUpdateCoordinator[UploadStatus]):
             update_interval=timedelta(seconds=entry.options.get(CONF_INTERVAL, DEFAULT_INTERVAL)),
         )
         self._session = async_get_clientsession(hass)
+        self.profile = PROFILES[entry.data[CONF_MODEL_ID]]
+        self.rain = RainTracker(hass, entry.entry_id) if self.profile.rain_total else None
+
+    async def _async_setup(self) -> None:
+        if self.rain:
+            await self.rain.async_load()
+
+    def _state(self, key: str) -> State | None:
+        """State of the station's BTHome sensor ``key``."""
+        unique_id = f"{self.config_entry.data[CONF_MAC]}-{key}"
+        entity_id = er.async_get(self.hass).async_get_entity_id("sensor", "bthome", unique_id)
+        return self.hass.states.get(entity_id) if entity_id else None
+
+    def _value(self, key: str, unit: str | None) -> float | None:
+        """Current value of BTHome sensor ``key`` in ``unit``, or None if unusable."""
+        state = self._state(key)
+        if state is None:
+            return None
+        try:
+            raw = float(state.state)
+        except ValueError:  # unknown / unavailable
+            return None
+        value = convert(raw, state.attributes.get(ATTR_UNIT_OF_MEASUREMENT), unit)
+        if value is None:
+            _LOGGER.debug("Skipping %s: unit can't be converted", state.entity_id)
+        return value
 
     def read_values(self) -> dict[str, float]:
-        """Current value of each mapped sensor, in protocol units, keyed by parameter."""
+        """Current readings in protocol units, keyed by Ecowitt parameter."""
         values: dict[str, float] = {}
-        for field in FIELDS:
-            entity_id = self.config_entry.options.get(field.key)
-            state = self.hass.states.get(entity_id) if entity_id else None
-            if state is None:
-                continue
-            try:
-                raw = float(state.state)
-            except ValueError:  # unknown / unavailable / non-numeric
-                continue
-            unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
-            value = convert(raw, unit, field.unit)
-            if value is None:
-                _LOGGER.debug("Skipping %s: unit %r can't be converted", entity_id, unit)
-                continue
-            values[field.param] = value
+        for key, param in self.profile.sensors.items():
+            if (value := self._value(key, PARAM_UNITS[param])) is not None:
+                values[param] = value
+        if self.rain and self.profile.rain_total:
+            total = self._value(self.profile.rain_total, UnitOfPrecipitationDepth.INCHES)
+            if total is not None:
+                values.update(self.rain.update(total, dt_util.now()))
         return values
 
     async def _async_update_data(self) -> UploadStatus:
         values = self.read_values()
         if not values:
-            raise UpdateFailed("None of the mapped sensors has a usable value")
+            raise UpdateFailed("The station has no usable readings yet")
         now = dt_util.utcnow()
         payload = build_payload(
             self.config_entry.data[CONF_MAC], values, now, self.hass.config.elevation

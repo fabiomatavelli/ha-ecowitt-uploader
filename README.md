@@ -1,25 +1,28 @@
 # Ecowitt.net Uploader for Home Assistant
 
-Upload the readings of **any** weather station in Home Assistant to your station on [ecowitt.net](https://www.ecowitt.net) — no Ecowitt gateway needed.
+Upload your **Ecowitt** weather station to [ecowitt.net](https://www.ecowitt.net) straight from Home Assistant, over Bluetooth — no Ecowitt gateway needed.
 
-Your station can be anything Home Assistant already knows about (Shelly, BTHome, Zigbee, ESPHome, a template sensor...): you pick which sensor is the temperature, the wind, the rain and so on, and the integration sends the current values to Ecowitt.net with the Ecowitt protocol at a fixed interval, converting units as needed.
+Some Ecowitt stations, like the WS90 sold by Shelly, broadcast their readings over Bluetooth (BTHome) instead of talking to an Ecowitt gateway, so they never reach ecowitt.net on their own. This integration finds the station, reads it through Home Assistant's BTHome integration and uploads its readings to your station on ecowitt.net with the Ecowitt protocol.
 
-> This is a community project. It is not affiliated with or endorsed by Ecowitt, and Ecowitt.net may change its upload service at any time.
+Only supported Ecowitt stations can be added: the station is recognised from its Bluetooth advertisement and identified on ecowitt.net by its own Bluetooth address, so there's nothing to map or type by hand.
+
+> This is a community project. It is not affiliated with or endorsed by Ecowitt or Shelly, and Ecowitt.net may change its upload service at any time.
+
+## Supported stations
+
+| Station | Readings uploaded | Notes |
+| --- | --- | --- |
+| Ecowitt WS90 (Shelly SBWS-90CM) | Temperature, humidity, absolute and relative pressure, wind speed, gust and direction, solar radiation, UV index, rain (rate, daily, weekly, monthly, yearly) | Rain totals and rate are calculated from the station's accumulated rain (see below). |
+
+Your station isn't listed? Open an issue with its model and the diagnostics of its BTHome device.
 
 ## Requirements
 
-- Home Assistant 2026.3 or newer.
+- Home Assistant 2026.3 or newer, with Bluetooth (a local adapter or a Bluetooth proxy) in range of the station.
+- The station added to Home Assistant's **BTHome** integration (Home Assistant usually discovers it on its own).
 - An [ecowitt.net](https://www.ecowitt.net) account.
 
-## 1. Add your station on ecowitt.net
-
-1. Sign in to ecowitt.net and add a new device.
-2. Set **Device Type** to **Weather Station**.
-3. Enter a **MAC address** for it and save. If your station has a MAC address of its own (e.g. its Bluetooth address, shown on its device page in Home Assistant), use that one; otherwise any unique address works, such as a locally administered one like `02:12:34:56:78:9A`.
-
-Write the MAC address down: the integration uses it to identify your station, so it must be exactly the one you entered here.
-
-## 2. Install the integration
+## Installation
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fabiomatavelli&repository=ha-ecowitt-uploader&category=integration)
 
@@ -27,34 +30,17 @@ Or, in HACS, add `https://github.com/fabiomatavelli/ha-ecowitt-uploader` as a cu
 
 Manual install: copy `custom_components/ecowitt_uploader` into your `config/custom_components/` folder and restart.
 
-## 3. Configure
+## Setup
 
-**Settings** > **Devices & services** > **Add integration** > **Ecowitt.net Uploader**:
+1. Home Assistant discovers the station and offers **Ecowitt.net Uploader** under **Settings** > **Devices & services**. You can also add it yourself with **Add integration** > **Ecowitt.net Uploader**.
+2. The setup dialog shows the station's **MAC address**. Sign in to ecowitt.net, add a new device with **Device Type: Weather Station** and that exact MAC address.
+3. Back in Home Assistant, confirm. Readings are uploaded every 60 seconds; change the interval (30-600 s) with the integration's **Configure** button.
 
-1. Enter the station's **MAC address** (any common format is accepted) and the **upload interval** (30-600 seconds, 60 by default).
-2. Map your sensors. Leave a measurement empty if your station doesn't have it; at least one is required.
+## How readings are uploaded
 
-You can change the interval and the mapping later from the integration's **Configure** button.
-
-### Measurements and units
-
-Units are converted automatically from the sensor's own unit of measurement, so metric and imperial sensors both work. A sensor whose unit can't be converted is skipped.
-
-| Measurement | Accepted units |
-| --- | --- |
-| Outdoor / indoor temperature | °C, °F, K |
-| Outdoor / indoor humidity | % |
-| Absolute / relative pressure | hPa, mbar, kPa, Pa, inHg, mmHg, psi |
-| Wind speed, wind gust | km/h, m/s, mph, kn, ft/s, Beaufort |
-| Wind direction | ° |
-| Rain rate | mm/h, in/h, mm/d, in/d |
-| Rain event / last hour / today / week / month / year | mm, cm, in |
-| Solar radiation | W/m² or lx |
-| UV index | (no unit) |
-
-**Relative pressure:** if you don't map a sea-level pressure sensor, it's calculated from the absolute pressure and the **elevation** set in Home Assistant (**Settings** > **System** > **General**), so make sure that's correct.
-
-**Rain totals:** many stations only report a running total. Home Assistant's [Utility Meter](https://www.home-assistant.io/integrations/utility_meter/) helper turns it into daily, weekly, monthly and yearly totals you can map here.
+- Units are converted from whatever Home Assistant shows (e.g. °C, km/h, hPa, lux) to the ones the Ecowitt protocol uses.
+- **Relative pressure** is calculated from the station's absolute pressure and the **elevation** set in Home Assistant (**Settings** > **System** > **General**), so make sure that's correct.
+- **Rain:** the WS90 only reports an ever-growing rain total. The integration keeps track of where each day, week (starting on Sunday), month and year began and uploads the difference, plus a rain rate from the last 10 minutes. Totals start at zero when the integration is first set up and survive restarts.
 
 ## Status sensor
 

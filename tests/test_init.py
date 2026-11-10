@@ -1,4 +1,4 @@
-"""End to end: mapped sensors are converted, uploaded and reported."""
+"""End to end: the station's BTHome readings are converted, uploaded and reported."""
 
 from __future__ import annotations
 
@@ -6,56 +6,44 @@ from datetime import timedelta
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.ecowitt_uploader.const import CONF_INTERVAL, CONF_MAC, DOMAIN
+from custom_components.ecowitt_uploader.const import CONF_INTERVAL, CONF_MAC, CONF_MODEL_ID, DOMAIN
 from custom_components.ecowitt_uploader.uploader import UPLOAD_URL
 
-from .conftest import MAC, PASSKEY
+from .conftest import MAC, PASSKEY, add_bthome_sensor
 
 OK = '{"errcode":"0","errmsg":"ok"}'
 
-STATES = {
-    "sensor.temp": ("19.0", "°C"),
-    "sensor.pressure": ("1002.6", "hPa"),
-    "sensor.wind": ("27.0", "km/h"),
-    "sensor.gust": ("31.68", "%"),  # wrong unit: skipped
-    "sensor.solar": ("3830", "lx"),
-    "sensor.rain": ("16.2", "mm"),
-    "sensor.rain_rate": ("2.54", "mm/h"),
-    "sensor.uv": ("0.0", None),
-    "sensor.humidity": ("unavailable", "%"),
-}
-OPTIONS = {
-    CONF_INTERVAL: 60,
-    "temperature": "sensor.temp",
-    "pressure_absolute": "sensor.pressure",
-    "wind_speed": "sensor.wind",
-    "wind_gust": "sensor.gust",
-    "solar_radiation": "sensor.solar",
-    "rain_daily": "sensor.rain",
-    "rain_rate": "sensor.rain_rate",
-    "uv_index": "sensor.uv",
-    "humidity": "sensor.humidity",
-    "indoor_humidity": "sensor.missing",
+# Units as a WS90 shows up in Home Assistant (wind switched to km/h by the user).
+WS90_STATES = {
+    "temperature": ("19.0", "°C"),
+    "humidity": ("90", "%"),
+    "pressure": ("1002.6", "hPa"),
+    "speed_1": ("27.0", "km/h"),
+    "speed_2": ("31.68", "km/h"),
+    "direction": ("225.0", "°"),
+    "uv_index": ("0.0", None),
+    "illuminance": ("3830", "lx"),
+    "precipitation": ("44.5", "mm"),
+    "dew_point": ("17.3", "°C"),  # not uploaded: Ecowitt.net computes it
 }
 
 
 @pytest.fixture
 def entry(hass: HomeAssistant) -> MockConfigEntry:
-    for entity_id, (state, unit) in STATES.items():
-        hass.states.async_set(entity_id, state, {ATTR_UNIT_OF_MEASUREMENT: unit} if unit else {})
+    for key, (state, unit) in WS90_STATES.items():
+        add_bthome_sensor(hass, key, state, unit)
     entry = MockConfigEntry(
         domain=DOMAIN,
         title=f"Ecowitt.net {MAC}",
         unique_id=MAC,
-        data={CONF_MAC: MAC},
-        options=OPTIONS,
+        data={CONF_MAC: MAC, CONF_MODEL_ID: 0x000B},
+        options={CONF_INTERVAL: 60},
     )
     entry.add_to_hass(hass)
     return entry
@@ -78,27 +66,40 @@ async def test_upload_converts_and_reports(
         "stationtype": "HomeAssistant",
         "model": "HomeAssistant",
         "tempf": "66.2",
+        "humidity": "90",
         "baromabsin": "29.607",
         "baromrelin": "29.607",
         "windspeedmph": "16.777",
-        "solarradiation": "30.229",
-        "dailyrainin": "0.638",
-        "rainratein": "0.1",
+        "windgustmph": "19.685",
+        "winddir": "225",
         "uv": "0",
+        "solarradiation": "30.229",
+        # first reading after install: every period starts at zero
+        "dailyrainin": "0",
+        "weeklyrainin": "0",
+        "monthlyrainin": "0",
+        "yearlyrainin": "0",
+        "rainratein": "0",
     }
 
     state = hass.states.get("sensor.ecowitt_net_aa_bb_cc_dd_ee_ff_last_upload")
     assert state is not None
-    assert state.attributes["fields"] == [
-        "baromabsin",
-        "baromrelin",
-        "dailyrainin",
-        "rainratein",
-        "solarradiation",
-        "tempf",
-        "uv",
-        "windspeedmph",
-    ]
+    assert "dailyrainin" in state.attributes["fields"]
+
+
+async def test_rain_since_setup_is_uploaded(
+    hass: HomeAssistant, entry: MockConfigEntry, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.post(UPLOAD_URL, text=OK)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    add_bthome_sensor(hass, "precipitation", "47.04", "mm")  # +2.54 mm = 0.1 in
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=61))
+    await hass.async_block_till_done()
+
+    assert aioclient_mock.call_count == 2
+    assert aioclient_mock.mock_calls[1][2]["dailyrainin"] == "0.1"
 
 
 async def test_keeps_uploading_with_status_sensor_disabled(
@@ -130,12 +131,12 @@ async def test_rejected_upload_retries_setup(
     assert entry.state is ConfigEntryState.SETUP_RETRY
 
 
-async def test_no_usable_sensor_does_not_upload(
+async def test_station_without_readings_does_not_upload(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    hass.states.async_set("sensor.temp", "unknown", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    add_bthome_sensor(hass, "temperature", "unknown", "°C")
     entry = MockConfigEntry(
-        domain=DOMAIN, unique_id=MAC, data={CONF_MAC: MAC}, options={"temperature": "sensor.temp"}
+        domain=DOMAIN, unique_id=MAC, data={CONF_MAC: MAC, CONF_MODEL_ID: 0x000B}, options={}
     )
     entry.add_to_hass(hass)
 
