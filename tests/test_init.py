@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.ecowitt_uploader.const import CONF_INTERVAL, CONF_MAC, DOMAIN
@@ -95,6 +99,26 @@ async def test_upload_converts_and_reports(
         "uv",
         "windspeedmph",
     ]
+
+
+async def test_keeps_uploading_with_status_sensor_disabled(
+    hass: HomeAssistant, entry: MockConfigEntry, aioclient_mock: AiohttpClientMocker
+) -> None:
+    er.async_get(hass).async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{MAC}_last_upload",
+        config_entry=entry,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+    aioclient_mock.post(UPLOAD_URL, text=OK)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 1
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=61))
+    await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 2
 
 
 async def test_rejected_upload_retries_setup(
